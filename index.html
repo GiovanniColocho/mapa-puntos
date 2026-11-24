@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mapa de puntos de referencia</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+<style>
+  html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
+  #map { height: 100%; }
+  #estado {
+    position: absolute; z-index: 1000; left: 50%; bottom: 24px; transform: translateX(-50%);
+    background: #fff; color: #222; padding: 8px 14px; border-radius: 8px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.25); font-size: 14px; display: none;
+  }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="estado" role="status"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script>
+const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-OBvvzV18MzUJNvRDnZhaRYsnxkrnoajlEUbWhE2XXhaInnBI3rlcyKsaHsbGO2U63B1GCiLy0Dxz/pub?gid=1365751325&single=true&output=csv";
+
+// CAMBIAR: coordenadas del centro [latitud, longitud]
+const CENTRO = [13.6929, -89.2182];
+const RADIO_KM = 10;
+
+const esc = s => String(s ?? "").replace(/[&<>"']/g,
+  c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const num = v => parseFloat(String(v).replace(",", "."));
+
+const estado = document.getElementById("estado");
+function aviso(msg) { estado.textContent = msg; estado.style.display = "block"; }
+
+const map = L.map("map").setView(CENTRO, 12);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+
+const circulo = L.circle(CENTRO, { radius: RADIO_KM * 1000, color: "#d33", fillOpacity: 0.05 }).addTo(map);
+map.fitBounds(circulo.getBounds());
+
+Papa.parse(CSV_URL, {
+  download: true, header: true, skipEmptyLines: true,
+  complete: ({ data }) => {
+    let n = 0;
+    data.forEach(p => {
+      const lat = num(p.lat), lng = num(p.lng);
+      if (isNaN(lat) || isNaN(lng)) return;
+      const d = map.distance(CENTRO, [lat, lng]) / 1000;
+      if (d > RADIO_KM) return;
+      L.marker([lat, lng]).addTo(map).bindPopup(
+        `<b>${esc(p.nombre)}</b><br>${esc(p.desc)}<br>${d.toFixed(1)} km del centro`);
+      n++;
+    });
+    if (n === 0) aviso("Aún no hay puntos publicados.");
+  },
+  error: () => aviso("No se pudieron cargar los puntos. Intenta de nuevo más tarde.")
+});
+</script>
+</body>
+</html>
