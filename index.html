@@ -25,7 +25,11 @@
   }
   .leyenda .dot {
     display: inline-block; width: 12px; height: 12px; border-radius: 50%;
-    margin-right: 6px; vertical-align: -1px;
+    margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.35); box-sizing: border-box;
+  }
+  .btn-ubic {
+    background: #fff; color: #222; border: 2px solid rgba(0,0,0,.2); border-radius: 6px;
+    padding: 8px 12px; font-size: 14px; cursor: pointer; box-shadow: 0 1px 5px rgba(0,0,0,.3);
   }
 </style>
 </head>
@@ -45,13 +49,15 @@ const RADIO_KM = 3;
 // Tipos de punto: la "etiqueta" debe coincidir con las opciones del Form
 const TIPOS = {
   comunidad: { etiqueta: "Comunidad SVC", emoji: "🏘️", color: "#1f6fb5" },
-  escuela:   { etiqueta: "Comunidad SG",   emoji: "🏘️", color: "#d98200" },
-  salud:     { etiqueta: "Comunidad SSF",     emoji: "🏘️", color: "#d33a3a" },
-  otro2:      { etiqueta: "Comunidad SSN",      emoji: "🏘️", color: "#297a25" },
-  otro:      { etiqueta: "Comunidad SST",      emoji: "🏘️", color: "#6f6b73" },
-  iglesia:   { etiqueta: "Iglesia",   emoji: "⛪", color: "#ffffff" }
+  escuela:   { etiqueta: "Comunidad SG",  emoji: "🏘️", color: "#d98200" },
+  salud:     { etiqueta: "Comunidad SSF", emoji: "🏘️", color: "#d33a3a" },
+  otro2:     { etiqueta: "Comunidad SSN", emoji: "🏘️", color: "#297a25" },
+  otro:      { etiqueta: "Comunidad SST", emoji: "🏘️", color: "#6f6b73" },
+  iglesia:   { etiqueta: "Iglesia",       emoji: "⛪",  color: "#ffffff" }
 };
 const TIPO_SIN_DATO = "comunidad"; // puntos sin columna "tipo"
+// Para valores del Form que no coinciden con ninguna etiqueta (no sale en la leyenda)
+const TIPO_DESCONOCIDO = { etiqueta: "Sin clasificar", emoji: "📍", color: "#9aa0a6" };
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -62,7 +68,7 @@ const PORETIQUETA = {};
 Object.entries(TIPOS).forEach(([k, t]) => { PORETIQUETA[norm(t.etiqueta)] = k; });
 function tipoDe(valor) {
   if (!norm(valor)) return TIPOS[TIPO_SIN_DATO];
-  return TIPOS[PORETIQUETA[norm(valor)]] || TIPOS.otro;
+  return TIPOS[PORETIQUETA[norm(valor)]] || TIPO_DESCONOCIDO;
 }
 function icono(t) {
   return L.divIcon({
@@ -109,6 +115,32 @@ Papa.parse(CSV_URL, {
   },
   error: () => aviso("No se pudieron cargar los puntos. Intenta de nuevo más tarde.")
 });
+
+// ===== Botón "Mi ubicación" =====
+let marcaUsuario, precision;
+const BtnUbic = L.control({ position: "topleft" });
+BtnUbic.onAdd = () => {
+  const b = L.DomUtil.create("button", "btn-ubic");
+  b.type = "button";
+  b.textContent = "📍 Mi ubicación";
+  L.DomEvent.disableClickPropagation(b);
+  b.onclick = () => map.locate({ setView: true, maxZoom: 15, enableHighAccuracy: true });
+  return b;
+};
+BtnUbic.addTo(map);
+
+map.on("locationfound", e => {
+  if (marcaUsuario) { map.removeLayer(marcaUsuario); map.removeLayer(precision); }
+  precision = L.circle(e.latlng, { radius: e.accuracy, color: "#1a73e8", weight: 1, fillOpacity: 0.1 }).addTo(map);
+  marcaUsuario = L.circleMarker(e.latlng, { radius: 8, color: "#fff", weight: 2, fillColor: "#1a73e8", fillOpacity: 1 })
+    .addTo(map).bindPopup("Estás aquí").openPopup();
+  const d = map.distance(CENTRO, e.latlng) / 1000;
+  aviso(d <= RADIO_KM
+    ? `Estás a ${d.toFixed(1)} km del centro, dentro del radio.`
+    : `Estás a ${d.toFixed(1)} km del centro, fuera del radio de ${RADIO_KM} km.`);
+  setTimeout(() => { estado.style.display = "none"; }, 6000);
+});
+map.on("locationerror", () => aviso("No se pudo obtener tu ubicación. Revisa los permisos del navegador."));
 </script>
 </body>
 </html>
