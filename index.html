@@ -108,7 +108,9 @@ Papa.parse(CSV_URL, {
       if (d > RADIO_KM) return;
       const t = tipoDe(p.tipo);
       L.marker([lat, lng], { icon: icono(t) }).addTo(map).bindPopup(
-        `<b>${esc(p.nombre)}</b><br>${t.emoji} ${t.etiqueta}<br>${esc(p.desc)}<br>${d.toFixed(1)} km del centro`);
+        `<b>${esc(p.nombre)}</b><br>${t.emoji} ${t.etiqueta}<br>${esc(p.desc)}<br>${d.toFixed(1)} km del centro<br>` +
+`<a href="https://www.google.com/maps/dir/?api=1&amp;destination=${lat},${lng}&amp;travelmode=driving" target="_blank" rel="noopener">🚗 Cómo llegar</a> · ` +
+`<a href="https://waze.com/ul?ll=${lat},${lng}&amp;navigate=yes" target="_blank" rel="noopener">Waze</a>`);;
       n++;
     });
     if (n === 0) aviso("Aún no hay puntos publicados.");
