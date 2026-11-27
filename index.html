@@ -202,21 +202,36 @@ Visitas.onAdd = () => {
   return d;
 };
 Visitas.addTo(map);
-if (GC_BASE) {
-  fetch(GC_BASE + "/counter/" + encodeURIComponent(location.pathname) + ".json", { cache: "no-store" })
-    .then(r => r.ok ? r.json() : Promise.reject())
-    .then(j => {
+// Prueba varias formas de la ruta (GoatCounter exige la ruta exacta con que guardó la visita)
+async function contarVisitas() {
+  if (!GC_BASE) return;
+  // Espera hasta 3 s a que cargue count.js para leer la ruta exacta que envía
+  for (let i = 0; i < 30 && !(window.goatcounter && window.goatcounter.get_data); i++) {
+    await new Promise(r => setTimeout(r, 100));
+  }
+  const candidatos = [];
+  try { const p = window.goatcounter.get_data().p; if (p) candidatos.push(p); } catch (e) {}
+  candidatos.push(location.pathname);
+  if (location.pathname.length > 1) candidatos.push(location.pathname.replace(/\/+$/, ""));
+  for (const c of Array.from(new Set(candidatos))) {
+    try {
+      const r = await fetch(GC_BASE + "/counter/" + encodeURIComponent(c) + ".json", { cache: "no-store" });
+      if (!r.ok) continue;
+      const j = await r.json();
       const el = document.getElementById("visitas");
       el.textContent = "Visitantes de esta página: " + j.count;
       el.style.display = "block";
-    })
-    .catch(() => { /* si falla, el contador simplemente no se muestra */ });
+      return;
+    } catch (e) { /* prueba la siguiente forma */ }
+  }
+  console.info("Contador de visitas sin datos para:", candidatos);
 }
+contarVisitas();
 
 // ===== Versión de la página =====
 // Sube VERSION cada vez que cambies el archivo. La fecha y hora se leen solas del servidor.
-const VERSION = "v1.1";
-const FECHA_RESPALDO = "2026-11-27 15:00"; // hora de El Salvador cuando se generó este archivo
+const VERSION = "v1.2";
+const FECHA_RESPALDO = "2026-11-27 15:03"; // hora de El Salvador cuando se generó este archivo
 function fechaPublicacion() {
   const lm = new Date(document.lastModified);
   // Si el servidor no envía fecha, el navegador devuelve "ahora": en ese caso se usa la de respaldo
