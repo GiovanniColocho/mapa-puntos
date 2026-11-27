@@ -215,7 +215,7 @@ async function contarVisitas() {
   if (location.pathname.length > 1) candidatos.push(location.pathname.replace(/\/+$/, ""));
   for (const c of Array.from(new Set(candidatos))) {
     try {
-      const r = await fetch(GC_BASE + "/counter/" + encodeURIComponent(c) + ".json", { cache: "no-store" });
+      const r = await fetch(GC_BASE + "/counter/" + encodeURIComponent(c) + ".json?start=2020-01-01", { cache: "no-store" });
       if (!r.ok) continue;
       const j = await r.json();
       const el = document.getElementById("visitas");
@@ -230,8 +230,8 @@ contarVisitas();
 
 // ===== Versión de la página =====
 // Sube VERSION cada vez que cambies el archivo. La fecha y hora se leen solas del servidor.
-const VERSION = "v1.2";
-const FECHA_RESPALDO = "2026-11-27 15:03"; // hora de El Salvador cuando se generó este archivo
+const VERSION = "v1.3";
+const FECHA_RESPALDO = "2026-11-27 15:13"; // hora de El Salvador cuando se generó este archivo
 function fechaPublicacion() {
   const lm = new Date(document.lastModified);
   // Si el servidor no envía fecha, el navegador devuelve "ahora": en ese caso se usa la de respaldo
