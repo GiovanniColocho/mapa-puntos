@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Mapa Pastoral de Comunidades</title>
+<title>Mapa Pastoral de Comunidades Parroquia San Gabriel Arcángel</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
 <style>
   html, body { height: 100%; margin: 0; font-family: system-ui, sans-serif; }
@@ -12,6 +12,7 @@
     position: absolute; z-index: 1000; left: 50%; bottom: 24px; transform: translateX(-50%);
     background: #fff; color: #222; padding: 8px 14px; border-radius: 8px;
     box-shadow: 0 1px 6px rgba(0,0,0,.25); font-size: 14px; display: none;
+    max-width: 90%; text-align: center;
   }
   .pin {
     width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg);
@@ -27,6 +28,10 @@
     display: inline-block; width: 12px; height: 12px; border-radius: 50%;
     margin-right: 6px; vertical-align: -1px; border: 1px solid rgba(0,0,0,.35); box-sizing: border-box;
   }
+  .visitas {
+    background: #fff; color: #222; padding: 6px 10px; border-radius: 8px;
+    box-shadow: 0 1px 6px rgba(0,0,0,.25); font-size: 13px;
+  }
   .btn-ubic {
     background: #fff; color: #222; border: 2px solid rgba(0,0,0,.2); border-radius: 6px;
     padding: 8px 12px; font-size: 14px; cursor: pointer; box-shadow: 0 1px 5px rgba(0,0,0,.3);
@@ -39,6 +44,8 @@
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<!-- CAMBIAR: reemplaza TU_CODIGO por el código que elijas en goatcounter.com (único lugar) -->
+<script data-goatcounter="https://comunidadsangabriel.goatcounter.com/count" async src="//gc.zgo.at/count.js"></script>
 <script>
 const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-OBvvzV18MzUJNvRDnZhaRYsnxkrnoajlEUbWhE2XXhaInnBI3rlcyKsaHsbGO2U63B1GCiLy0Dxz/pub?gid=1365751325&single=true&output=csv";
 
@@ -63,6 +70,21 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g,
   c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const num = v => parseFloat(String(v).replace(",", "."));
 const norm = s => String(s ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim().toLowerCase();
+const slug = s => norm(s).replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "sin-nombre";
+
+// ===== Estadísticas (GoatCounter): no guarda coordenadas ni datos personales =====
+function evento(ruta, titulo) {
+  try {
+    if (window.goatcounter && window.goatcounter.count) {
+      window.goatcounter.count({ path: "evento/" + ruta, title: titulo, event: true });
+    }
+  } catch (e) { /* si el contador falla, el mapa sigue funcionando */ }
+}
+// Clics en "Cómo llegar"
+document.addEventListener("click", e => {
+  const a = e.target.closest && e.target.closest("a[data-ev]");
+  if (a) evento(a.dataset.ev, a.dataset.t);
+});
 
 const PORETIQUETA = {};
 Object.entries(TIPOS).forEach(([k, t]) => { PORETIQUETA[norm(t.etiqueta)] = k; });
@@ -107,10 +129,12 @@ Papa.parse(CSV_URL, {
       const d = map.distance(CENTRO, [lat, lng]) / 1000;
       if (d > RADIO_KM) return;
       const t = tipoDe(p.tipo);
-      L.marker([lat, lng], { icon: icono(t) }).addTo(map).bindPopup(
+      const id = slug(p.nombre);
+      const m = L.marker([lat, lng], { icon: icono(t) }).addTo(map).bindPopup(
         `<b>${esc(p.nombre)}</b><br>${t.emoji} ${t.etiqueta}<br>${esc(p.desc)}<br>${d.toFixed(1)} km del centro<br>` +
-`<a href="https://www.google.com/maps/dir/?api=1&amp;destination=${lat},${lng}&amp;travelmode=driving" target="_blank" rel="noopener">🚗 Cómo llegar</a> · ` +
-`<a href="https://waze.com/ul?ll=${lat},${lng}&amp;navigate=yes" target="_blank" rel="noopener">Waze</a>`);;
+        `<a href="https://www.google.com/maps/dir/?api=1&amp;destination=${lat},${lng}&amp;travelmode=driving" target="_blank" rel="noopener" data-ev="llegar-maps/${id}" data-t="Cómo llegar (Google Maps): ${esc(p.nombre)}">🚗 Cómo llegar</a> · ` +
+        `<a href="https://waze.com/ul?ll=${lat},${lng}&amp;navigate=yes" target="_blank" rel="noopener" data-ev="llegar-waze/${id}" data-t="Cómo llegar (Waze): ${esc(p.nombre)}">Waze</a>`);
+      m.on("popupopen", () => evento("punto/" + id, "Punto consultado: " + p.nombre));
       n++;
     });
     if (n === 0) aviso("Aún no hay puntos publicados.");
@@ -119,7 +143,20 @@ Papa.parse(CSV_URL, {
 });
 
 // ===== Botón "Mi ubicación" =====
-let marcaUsuario, precision;
+// Zona aproximada: sector (N, NE, E...) + franja de distancia al centro. No se envían coordenadas.
+function zonaAprox(latlng) {
+  const d = map.distance(CENTRO, latlng) / 1000;
+  if (d > 10) return "Fuera de zona (más de 10 km)";
+  if (d < 1) return "Cerca del centro (menos de 1 km)";
+  const dy = latlng.lat - CENTRO[0];
+  const dx = (latlng.lng - CENTRO[1]) * Math.cos(CENTRO[0] * Math.PI / 180);
+  const ang = (Math.atan2(dx, dy) * 180 / Math.PI + 360) % 360; // 0 = norte
+  const sector = ["Norte","Noreste","Este","Sureste","Sur","Suroeste","Oeste","Noroeste"][Math.round(ang / 45) % 8];
+  const banda = d <= RADIO_KM ? `1 a ${RADIO_KM} km` : `${RADIO_KM} a 10 km`;
+  return `${sector}, ${banda}`;
+}
+
+let marcaUsuario, precision, zonaEnviada = false;
 const BtnUbic = L.control({ position: "topleft" });
 BtnUbic.onAdd = () => {
   const b = L.DomUtil.create("button", "btn-ubic");
@@ -137,12 +174,41 @@ map.on("locationfound", e => {
   marcaUsuario = L.circleMarker(e.latlng, { radius: 8, color: "#fff", weight: 2, fillColor: "#1a73e8", fillOpacity: 1 })
     .addTo(map).bindPopup("Estás aquí").openPopup();
   const d = map.distance(CENTRO, e.latlng) / 1000;
-  aviso(d <= RADIO_KM
+  let msg = d <= RADIO_KM
     ? `Estás a ${d.toFixed(1)} km del centro, dentro del radio.`
-    : `Estás a ${d.toFixed(1)} km del centro, fuera del radio de ${RADIO_KM} km.`);
-  setTimeout(() => { estado.style.display = "none"; }, 6000);
+    : `Estás a ${d.toFixed(1)} km del centro, fuera del radio de ${RADIO_KM} km.`;
+  // Solo se registra si la ubicación es razonablemente precisa y una vez por visita
+  if (!zonaEnviada && e.accuracy <= 1000) {
+    const z = zonaAprox(e.latlng);
+    evento("zona/" + slug(z), "Zona: " + z);
+    zonaEnviada = true;
+    msg += " Se registra solo tu zona aproximada, sin coordenadas, para estadísticas.";
+  }
+  aviso(msg);
+  setTimeout(() => { estado.style.display = "none"; }, 7000);
 });
 map.on("locationerror", () => aviso("No se pudo obtener tu ubicación. Revisa los permisos del navegador."));
+
+// ===== Contador público: "Visitantes de esta página: n" =====
+const GC_BASE = (document.querySelector("script[data-goatcounter]")?.dataset.goatcounter || "").replace(/\/count$/, "");
+const Visitas = L.control({ position: "topright" });
+Visitas.onAdd = () => {
+  const d = L.DomUtil.create("div", "visitas");
+  d.id = "visitas"; d.style.display = "none";
+  return d;
+};
+Visitas.addTo(map);
+if (GC_BASE) {
+  fetch(GC_BASE + "/counter/" + encodeURIComponent(location.pathname) + ".json")
+    .then(r => r.ok ? r.json() : Promise.reject())
+    .then(j => {
+      const el = document.getElementById("visitas");
+      el.textContent = "Visitantes de esta página: " + j.count;
+      el.style.display = "block";
+    })
+    .catch(() => { /* si falla, el contador simplemente no se muestra */ });
+}
 </script>
+
 </body>
 </html>
